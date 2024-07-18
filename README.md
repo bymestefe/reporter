@@ -1,8 +1,8 @@
-## Reporter Object for Generating Reports
+## Reporter for Generating Reports
 
 ### Overview
 
-The **Reporter Object** is a component designed to generate reports in either chart or table format based on specified queries. It provides a flexible interface to retrieve data from multiple databases, execute user-defined queries, and visualize the results.
+The **Reporter** is a component designed to generate reports in either chart or table format based on specified queries. It provides a flexible interface to retrieve data from multiple databases, execute user-defined queries, and visualize the results.
 
 ### Features
 
