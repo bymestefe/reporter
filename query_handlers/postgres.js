@@ -23,21 +23,7 @@ class QueueDatabase {
     }
   }
 
-  buildConditionString = async (conditions, logicalOperator = 'AND') => {
-    return conditions.map(cond => {
-        if (cond.type === 'basic') {
-            const { field, operator, data } = cond;
-            const val = typeof data === 'string' ? `'${data}'` : data;
-            return `${field} ${operator} ${val}`;
-        } else if (cond.type === 'nested_and') {
-            return `(${this.buildConditionString(cond.conditions)})`;
-        } else if (cond.type === 'nested_or') {
-            return `(${this.buildConditionString(cond.conditions, 'OR')})`;
-        }
-    }).join(` ${logicalOperator} `);
-  }
-
-  updateQueueItem = async (id, status) => {
+  static async updateQueueItem (id, status) {
     const updateQuery = {
       text: 'UPDATE queue_items SET status = $2 WHERE id = $1',
       values: [id, status]
@@ -56,8 +42,8 @@ class QueueDatabase {
     let queryValues;
 
     if (this.lastProcessedId) {
-      queryText = 'SELECT * FROM queue_items WHERE id > $1';
-      queryValues = [this.lastProcessedId];
+      queryText = 'SELECT * FROM queue_items WHERE id > $1 and status = $2';
+      queryValues = [this.lastProcessedId, 'pending'];
     } else {
       queryText = 'SELECT * FROM queue_items';
       queryValues = [];
@@ -73,7 +59,6 @@ class QueueDatabase {
       const rows = result.rows;
 
       if (rows.length > 0) {
-        console.log(`Found ${rows.length} new rows:`);
         rows.forEach(row => {
           console.log(`Row ID: ${row.id}, Status: ${row.status}, Payload: ${JSON.stringify(row.payload)}`);
         });
@@ -82,8 +67,10 @@ class QueueDatabase {
       } else {
         console.log('No new rows found.');
       }
+      return rows; 
     } catch (error) {
       console.error('Error checking for new rows:', error);
+      return [];
     }
   }
 
