@@ -1,11 +1,10 @@
 const QueueDatabase = require('./query_handlers/postgres');
-const ArchiveDbClickhouse = require('./query_handlers/clickhouse');
+const Helpers = require('./helpers');
 
 const main = async () => {
-  await QueueDatabase.createTableIfNotExists();
-  const queueItems = await QueueDatabase.getQueueItems();
-  console.log(queueItems);
-  await QueueDatabase.closeConnection();
+  const queueDb = new QueueDatabase();
+  await queueDb.createTableIfNotExists();
+  Helpers.runInterval(queueDb.checkNewRows);
 };
 
 main();
