@@ -14,6 +14,17 @@ class Helpers {
     });
   }
 
+  static async runInterval(fn) {
+    while (true) {
+        await fn();
+        await new Promise(resolve => setTimeout(resolve, 10000));
+    }
+  }
+
+  static async addToQueue(item) {
+    queue.push(item);
+  }
+
 }
 
 module.exports = Helpers;
