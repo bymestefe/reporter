@@ -37,12 +37,17 @@ class QueueDatabase {
     }).join(` ${logicalOperator} `);
   }
 
-  getQueueItems = async () => {
+  updateQueueItem = async (id, status) => {
+    const updateQuery = {
+      text: 'UPDATE queue_items SET status = $2 WHERE id = $1',
+      values: [id, status]
+    };
+
     try {
-      const res = await pool.query('SELECT * FROM queue_items');
-      return res.rows;
-    } catch (err) {
-      console.error('Error executing query', err.stack);
+      await pool.query(updateQuery);
+      console.log(`Updated row with ID ${id} to status ${status}`);
+    } catch (error) {
+      console.error('Error updating row:', error);
     }
   }
 
@@ -89,6 +94,7 @@ class QueueDatabase {
       console.error('Error closing connection', err.stack);
     }
   }
+
 }
 
 module.exports = QueueDatabase;
