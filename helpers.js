@@ -1,4 +1,6 @@
 const fs = require('fs');
+const ArchiveDbClickhouse = require('./query_handlers/clickhouse');
+const QueueDatabase = require('./query_handlers/postgres');
 
 class Helpers {
 
@@ -10,21 +12,35 @@ class Helpers {
         }
         const base64Data = Buffer.from(data).toString('base64');
         const dataUrl = `data:image/png;base64,${base64Data}`;
-        console.log(dataUrl);
+        return dataUrl;
     });
   }
 
   static async runInterval(fn) {
+    let processing = false;
+
     while (true) {
-        await fn();
+        if (!processing) {
+            processing = true;
+            let data = await fn();
+
+            for (let row of data) {
+              if (row.payload.database === "clickhouse") {
+                let query = await ArchiveDbClickhouse.createSelectQuery(row.payload);
+                let res = await ArchiveDbClickhouse.executeQuery(query);
+                console.log(res);
+              }else {
+                console.log("Database is not clickhouse");
+              }
+              QueueDatabase.updateQueueItem(row.id, 'done');
+            }
+
+            processing = false;
+        }
+
         await new Promise(resolve => setTimeout(resolve, 10000));
     }
   }
-
-  static async addToQueue(item) {
-    queue.push(item);
-  }
-
 }
 
 module.exports = Helpers;
