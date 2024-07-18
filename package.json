@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "@clickhouse/client": "^1.2.0",
+    "canvas": "^2.11.2",
+    "chart.js": "^3.5.1",
+    "chartjs-node-canvas": "^4.1.6",
+    "chartjs-plugin-datalabels": "^2.2.0",
+    "dotenv": "^16.4.5",
+    "pdfmake": "^0.2.10",
+    "pg": "^8.12.0"
+  }
+}
