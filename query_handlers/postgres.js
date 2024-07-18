@@ -45,8 +45,8 @@ class QueueDatabase {
       queryText = 'SELECT * FROM queue_items WHERE id > $1 and status = $2';
       queryValues = [this.lastProcessedId, 'pending'];
     } else {
-      queryText = 'SELECT * FROM queue_items';
-      queryValues = [];
+      queryText = 'SELECT * FROM queue_items WHERE status = $1';
+      queryValues = ['pending'];
     }
 
     const query = {
