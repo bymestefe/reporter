@@ -1,5 +1,3 @@
-# Project Name
-
 ## Reporter Object for Generating Reports
 
 ### Overview
