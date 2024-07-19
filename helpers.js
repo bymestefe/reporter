@@ -16,9 +16,8 @@ class Helpers {
     });
   }
 
-  static async runInterval(fn) {
+  static async runInterval(fn, PdfGenerator) {
     let processing = false;
-
     while (true) {
         if (!processing) {
             processing = true;
@@ -28,7 +27,7 @@ class Helpers {
               if (row.payload.database === "clickhouse") {
                 let query = await ArchiveDbClickhouse.createSelectQuery(row.payload);
                 let res = await ArchiveDbClickhouse.executeQuery(query);
-                console.log(res);
+                await PdfGenerator.generatePDF(res, "test", "Test Report Result", "logo.png");
               }else {
                 console.log("Database is not clickhouse");
               }
