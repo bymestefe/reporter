@@ -3,7 +3,6 @@ const clickhouse = require('../configs/clickhouse_config');
 class ArchiveDbClickhouse {
 
   static async executeQuery(queryText) {
-    console.log(queryText );
     try {
         const result = await clickhouse.query({
             query: queryText,
@@ -30,7 +29,6 @@ class ArchiveDbClickhouse {
   }
 
   static async createSelectQuery(payload) {
-    console.log(payload);
     if (payload.query !== undefined) {
         return payload.query;
     }
@@ -44,8 +42,6 @@ class ArchiveDbClickhouse {
         query += ` WHERE ${conditionStrings}`;
     }
 
-    console.log('Query:', query);
-
     if (payload.group_by) {
       query += ` GROUP BY ${payload.group_by}`;
     }
@@ -58,6 +54,7 @@ class ArchiveDbClickhouse {
         query += ` LIMIT ${payload.limit}`;
     }
 
+    console.log('Query:', query);
     return query;
   }
 
