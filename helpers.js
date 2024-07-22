@@ -19,23 +19,47 @@ class Helpers {
   static async runInterval(fn, PdfGenerator) {
     let processing = false;
     while (true) {
-        if (!processing) {
-            processing = true;
-            let data = await fn();
+      if (!processing) {
+        processing = true;
+        let data = await fn();
 
-            for (let row of data) {
-              if (row.payload.database === "clickhouse") {
-                let query = await ArchiveDbClickhouse.createSelectQuery(row.payload);
-                let res = await ArchiveDbClickhouse.executeQuery(query);
-                await PdfGenerator.generatePDF(res, "test", "Test Report Result", "logo.png");
-              }else {
-                console.log("Database is not clickhouse");
-              }
-              QueueDatabase.updateQueueItem(row.id, 'done');
+        for (let row of data) {
+          if (row.payload.database === "clickhouse") {
+            let query = await ArchiveDbClickhouse.createSelectQuery(row.payload);
+            let res = await ArchiveDbClickhouse.executeQuery(query);
+
+            if (row.payload.is_charted == 1) {
+              const columns = row.payload.columns;
+              let keyColumn = null;
+              let countColumn = null;
+            
+              columns.forEach(column => {
+                const parts = column.split(" as ");
+                const alias = parts[1] || parts[0];
+              
+                if (column.includes("count") && countColumn === null) {
+                  countColumn = alias;
+                } else if (!column.includes("count") && keyColumn === null) {
+                  keyColumn = alias;
+                }
+              });
+
+              const labels = res.map(item => item[keyColumn]);
+              const data = res.map(item => parseInt(item[countColumn], 10));
+              //console.log(labels);
+              //console.log(data);
+              await PdfGenerator.generatePdfWithChart(row.payload.chart_type, data, labels, row.payload.chart_title);
+            }else {
+              await PdfGenerator.generatePDF(res, "test", row.payload.chart_title, "logo.png");
             }
-
-            processing = false;
+          }else {
+            console.log("Database is not clickhouse");
+          }
+          QueueDatabase.updateQueueItem(row.id, 'done');
         }
+
+        processing = false;
+      }
 
         await new Promise(resolve => setTimeout(resolve, 10000));
     }
