@@ -1,3 +1,4 @@
+const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 const PdfPrinter = require('pdfmake');
 const fs = require('fs');
 
@@ -53,6 +54,86 @@ class PDFReportGenerator {
     } catch (err) {
         console.error('Error generating PDF:', err);
     }
+  }
+
+  async generatePdfWithChart(chartType='bar', data, labels, title='Chart') {
+
+    const imageBuffer = await this.createChartImage(chartType, data, labels, title);
+    const imageBase64 = imageBuffer.toString('base64');
+    const fonts = {
+        Roboto: {
+            normal: 'fonts/Roboto-Regular.ttf',
+            bold: 'fonts/Roboto-Medium.ttf',
+            italics: 'fonts/Roboto-Italic.ttf',
+            bolditalics: 'fonts/Roboto-MediumItalic.ttf'
+        }
+    };
+
+    const printer = new PdfPrinter(fonts);
+
+    const docDefinition = {
+        content: [
+            {
+                image: `data:image/png;base64,${imageBase64}`,
+                width: 730
+            },
+        ],
+        pageOrientation: 'landscape',
+        styles: {
+            header: {
+                fontSize: 22,
+                bold: true,
+                margin: [0, 0, 0, 10] // Adjust the margin as needed
+            }
+        },
+    };
+
+    const pdfDoc = printer.createPdfKitDocument(docDefinition);
+    pdfDoc.pipe(fs.createWriteStream('output.pdf'));
+    pdfDoc.end();
+  }
+
+  async createChartImage(chartType, data, labels, title, indexAxis='x', width = 800, height = 600) {
+    const dataCount = data.length;
+    const { backgroundColors, borderColors } = this.generateColors(data,dataCount);
+    const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height, plugins: {
+        requireLegacy: ['chartjs-plugin-datalabels']
+    } });
+
+    const configuration = {
+        type: chartType,
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '',
+                data: data,
+                fill: false,
+                borderColor: 'black',
+                tension: 0,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors
+            }],
+        },
+        options: {
+            responsive: true,
+            indexAxis: indexAxis,
+            plugins: {
+              legend: {
+                display: true,
+                title: {
+                    display: true,
+                    text: title,
+                    color: 'black',
+                    bold: true
+
+                },
+                position: 'top',
+              },
+            }
+          },
+    };
+
+    return await chartJSNodeCanvas.renderToBuffer(configuration);
   }
 
   createTable(data) {
@@ -137,7 +218,7 @@ class PDFReportGenerator {
     for (let i = 0; i < dataCount; i++) {
         const hue = data[i] / sum * 360;
         degree_sum += hue;
-        const [r, g, b] = hslToRgb(degree_sum, 100, 50);
+        const [r, g, b] = this.hslToRgb(degree_sum, 100, 50);
 
         colors.backgroundColors.push(`rgba(${r}, ${g}, ${b}, 0.4)`);
         colors.borderColors.push(`rgba(${r}, ${g}, ${b}, 0)`);
@@ -156,6 +237,7 @@ class PDFReportGenerator {
 
     return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
   }
+
 }
 
 module.exports = PDFReportGenerator;
