@@ -57,8 +57,10 @@ class PDFReportGenerator {
     }
   }
 
-  async generatePdfWithChart(chartType='bar', data, labels, title='Chart') {
+  async generatePdfWithChart(data, labels, report_settings) {
 
+    const chartType = report_settings.chart_type;
+    const title = report_settings.report_title;
     const imageBuffer = await this.createChartImage(chartType, data, labels, title);
     const imageBase64 = imageBuffer.toString('base64');
     const fonts = {
@@ -90,7 +92,7 @@ class PDFReportGenerator {
     };
 
     const pdfDoc = printer.createPdfKitDocument(docDefinition);
-    pdfDoc.pipe(fs.createWriteStream('output.pdf'));
+    pdfDoc.pipe(fs.createWriteStream(`${report_settings.report_name}.pdf`));
     pdfDoc.end();
   }
 

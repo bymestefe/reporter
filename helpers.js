@@ -37,6 +37,7 @@ class Helpers {
             };
 
             if (row.payload.is_charted == 1) {
+              report_settings.chart_type = row.payload.chart_type;
               const columns = row.payload.columns;
               let keyColumn = null;
               let countColumn = null;
@@ -56,7 +57,7 @@ class Helpers {
               const data = res.map(item => parseInt(item[countColumn], 10));
               //console.log(labels);
               //console.log(data);
-              await PdfGenerator.generatePdfWithChart(row.payload.chart_type, data, labels, row.payload.chart_title);
+              await PdfGenerator.generatePdfWithChart(data, labels, report_settings);
             }else {
               await PdfGenerator.generatePDF(res, report_settings);
             }
