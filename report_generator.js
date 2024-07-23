@@ -1,6 +1,7 @@
 const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 const PdfPrinter = require('pdfmake');
 const fs = require('fs');
+const { report } = require('process');
 
 class PDFReportGenerator {
   constructor() {
@@ -15,13 +16,13 @@ class PDFReportGenerator {
     this.printer = new PdfPrinter(this.fonts);
   }
 
-  async generatePDF(data, reportName = 'sample', reportHeader = 'Query Result', logo = 'logo.png') {
+  async generatePDF(data, report_settings) {
     try {
         const currentDate = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
         const docDefinition = {
             content: [
                 {
-                    text: currentDate,
+                    text: `Creator: ${report_settings.creator} | ${currentDate}`,
                     alignment: 'right',
                     fontSize: 5,
                     margin: [0, -35, 0, 0]
@@ -29,12 +30,12 @@ class PDFReportGenerator {
                 {
                     columns: [
                         {
-                            text: reportHeader,
+                            text: report_settings.report_title,
                             style: 'header',
                             alignment: 'left',
                         },
                         {
-                            image: logo,
+                            image: report_settings.logo,
                             width: 50,
                             height: 50,
                             alignment: 'right',
@@ -45,11 +46,11 @@ class PDFReportGenerator {
                 this.createTable(data),
             ],
             styles: this.getStyles(),
-            pageOrientation: 'landscape',
+            pageOrientation: report_settings.orientation,
         };
 
         const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
-        pdfDoc.pipe(fs.createWriteStream(`${reportName}.pdf`));
+        pdfDoc.pipe(fs.createWriteStream(`${report_settings.report_name}.pdf`));
         pdfDoc.end();
     } catch (err) {
         console.error('Error generating PDF:', err);
