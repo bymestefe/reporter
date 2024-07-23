@@ -28,6 +28,14 @@ class Helpers {
             let query = await ArchiveDbClickhouse.createSelectQuery(row.payload);
             let res = await ArchiveDbClickhouse.executeQuery(query);
 
+            let report_settings = {
+              logo: row.payload.logo || "logo.png",
+              report_name: row.payload.report_name,
+              report_title: row.payload.title,
+              orientation: row.payload.is_landscape == 1 ? "landscape" : "portrait",
+              creator: row.payload.creator || "Prodarc",
+            };
+
             if (row.payload.is_charted == 1) {
               const columns = row.payload.columns;
               let keyColumn = null;
@@ -50,7 +58,7 @@ class Helpers {
               //console.log(data);
               await PdfGenerator.generatePdfWithChart(row.payload.chart_type, data, labels, row.payload.chart_title);
             }else {
-              await PdfGenerator.generatePDF(res, "test", row.payload.chart_title, "logo.png");
+              await PdfGenerator.generatePDF(res, report_settings);
             }
           }else {
             console.log("Database is not clickhouse");
