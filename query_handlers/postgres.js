@@ -7,7 +7,7 @@ class QueueDatabase {
   }
 
   async createTableIfNotExists() {
-    const createTableQuery = `
+    const createQueueItemsTableQuery = `
       CREATE TABLE IF NOT EXISTS queue_items (
         id SERIAL PRIMARY KEY,
         status VARCHAR(50) NOT NULL,
@@ -15,11 +15,24 @@ class QueueDatabase {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
+  
+    const createReportResultsTableQuery = `
+      CREATE TABLE IF NOT EXISTS report_results (
+        id SERIAL PRIMARY KEY,
+        report_name TEXT NOT NULL,
+        result JSON,
+        path TEXT NOT NULL,
+        status VARCHAR(50) NOT NULL CHECK (status IN ('processing', 'completed', 'error occured')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+  
     try {
-      await pool.query(createTableQuery);
-      console.log('Table is ready.');
+      await pool.query(createQueueItemsTableQuery);
+      await pool.query(createReportResultsTableQuery);
+      console.log('Tables are ready.');
     } catch (err) {
-      console.error('Error creating table', err.stack);
+      console.error('Error creating tables', err.stack);
     }
   }
 
@@ -34,6 +47,20 @@ class QueueDatabase {
       console.log(`Updated row with ID ${id} to status ${status}`);
     } catch (error) {
       console.error('Error updating row:', error);
+    }
+  }
+
+  static async updateReportResult (id, status) {
+    const updateQuery = {
+      text: 'UPDATE report_results SET status = $2 WHERE id = $1',
+      values: [id, status]
+    };
+
+    try {
+      await pool.query(updateQuery);
+      console.log(`Updated report result with ID ${id} to status ${status}`);
+    } catch (error) {
+      console.error('Error updating report result:', error);
     }
   }
 
