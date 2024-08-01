@@ -17,19 +17,28 @@ class QueueDatabase {
     `;
   
     const createReportResultsTableQuery = `
-      CREATE TABLE IF NOT EXISTS report_results (
-        id SERIAL PRIMARY KEY,
-        report_name TEXT NOT NULL,
-        result JSON,
-        path TEXT NOT NULL,
-        status VARCHAR(50) NOT NULL CHECK (status IN ('processing', 'completed', 'error occured')),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
+    CREATE TABLE IF NOT EXISTS report_results (
+      id SERIAL PRIMARY KEY,
+      report_name TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+  
+  const createIndividualReportResultsTableQuery = `
+    CREATE TABLE IF NOT EXISTS individual_report_results (
+      id SERIAL PRIMARY KEY,
+      report_result_id INTEGER NOT NULL REFERENCES report_results(id),
+      result JSON,
+      path TEXT NOT NULL,
+      status VARCHAR(50) NOT NULL CHECK (status IN ('processing', 'completed', 'error occured')),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
   
     try {
       await pool.query(createQueueItemsTableQuery);
       await pool.query(createReportResultsTableQuery);
+      await pool.query(createIndividualReportResultsTableQuery);
       console.log('Tables are ready.');
     } catch (err) {
       console.error('Error creating tables', err.stack);
@@ -52,7 +61,7 @@ class QueueDatabase {
 
   static async updateReportResult (id, status) {
     const updateQuery = {
-      text: 'UPDATE report_results SET status = $2 WHERE id = $1',
+      text: 'UPDATE individual_report_results SET status = $2 WHERE id = $1',
       values: [id, status]
     };
 
