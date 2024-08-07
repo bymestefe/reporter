@@ -2,6 +2,7 @@ const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 const PdfPrinter = require('pdfmake');
 const fs = require('fs');
 const { report } = require('process');
+const nodemailer = require('nodemailer');
 
 class PDFReportGenerator {
   constructor() {
@@ -50,8 +51,17 @@ class PDFReportGenerator {
         };
 
         const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
-        pdfDoc.pipe(fs.createWriteStream(`${report_settings.report_name}.pdf`));
+        const pdfPath = `${report_settings.report_name}.pdf`;
+        console.log(pdfPath);
+        pdfDoc.pipe(fs.createWriteStream(pdfPath));
         pdfDoc.end();
+
+        let recipient_emails = report_settings.recipient_emails;
+        
+        for (let i = 0; i < recipient_emails.length; i++) {
+            await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, pdfPath);
+        }
+
     } catch (err) {
         console.error('Error generating PDF:', err);
     }
@@ -92,8 +102,47 @@ class PDFReportGenerator {
     };
 
     const pdfDoc = printer.createPdfKitDocument(docDefinition);
-    pdfDoc.pipe(fs.createWriteStream(`${report_settings.report_name}.pdf`));
+    const pdfPath = `${report_settings.report_name}.pdf`;
+    pdfDoc.pipe(fs.createWriteStream(pdfPath));
     pdfDoc.end();
+
+    let recipient_emails = report_settings.recipient_emails;
+        
+    for (let i = 0; i < recipient_emails.length; i++) {
+        await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, pdfPath);
+    }
+  }
+
+  async  sendEmail(smtp_settings, recipient_email, report_settings, pdfPath) {
+    try {
+        let transporter = nodemailer.createTransport({
+            host: smtp_settings.host,
+            port: smtp_settings.port,
+            secure: smtp_settings.secure,
+            auth: {
+                user: smtp_settings.user,
+                pass: smtp_settings.pass
+            }
+        });
+
+        let mailOptions = {
+            from: smtp_settings.user,
+            to: recipient_email,
+            subject: report_settings.report_title,
+            text: 'Please find the attached report.',
+            attachments: [
+                {
+                    filename: `${report_settings.report_name}.pdf`,
+                    path: "/usr/local/siemplus/reporter/" + pdfPath
+                }
+            ]
+        };
+
+        let info = await transporter.sendMail(mailOptions);
+        console.log('Email sent: ' + info.response);
+    } catch (error) {
+        console.error('Error sending email:', error);
+    }
   }
 
   async createChartImage(chartType, data, labels, title, indexAxis='x', width = 800, height = 600) {
