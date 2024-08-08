@@ -54,7 +54,6 @@ class PDFReportGenerator {
         const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
         const pdfPath = `${report_settings.report_name}.pdf`;
         const newPdfPath = path.join('pdfs', `${report_settings.report_name}.pdf`);
-        console.log(pdfPath);
         pdfDoc.pipe(fs.createWriteStream(newPdfPath));
         pdfDoc.end();
 
@@ -62,17 +61,14 @@ class PDFReportGenerator {
             fs.chmod(newPdfPath, 0o777, (err) => {
                 if (err) {
                     console.error(`Failed to set permissions for ${newPdfPath}:`, err);
-                } else {
-                    console.log(`Permissions set to 777 for ${newPdfPath}`);
                 }
             });
         });
 
         let recipient_emails = report_settings.mail_to;
-
         if (recipient_emails && recipient_emails.length > 0) {
             for (let i = 0; i < recipient_emails.length; i++) {
-                await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, pdfPath);
+                await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, newPdfPath);
             }
         }
 
@@ -125,17 +121,14 @@ class PDFReportGenerator {
         fs.chmod(newPdfPath, 0o777, (err) => {
             if (err) {
                 console.error(`Failed to set permissions for ${newPdfPath}:`, err);
-            } else {
-                console.log(`Permissions set to 777 for ${newPdfPath}`);
             }
         });
     });
 
     let recipient_emails = report_settings.mail_to;
-
     if (recipient_emails && recipient_emails.length > 0) {
         for (let i = 0; i < recipient_emails.length; i++) {
-            await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, pdfPath);
+            await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, newPdfPath);
         }
     }
   }
@@ -160,7 +153,7 @@ class PDFReportGenerator {
             attachments: [
                 {
                     filename: `${report_settings.report_name}.pdf`,
-                    path: "/usr/local/siemplus/reporter/" + pdfPath
+                    path: pdfPath
                 }
             ]
         };

@@ -35,6 +35,8 @@ class Helpers {
                 report_title: row.payload.title,
                 orientation: row.payload.is_landscape == 1 ? "landscape" : "portrait",
                 creator: row.payload.creator || "Prodarc",
+                smtp_settings: row.payload.smtp_settings,
+                mail_to: row.payload.mail_to,
               };
   
               if (row.payload.is_charted == 1) {
