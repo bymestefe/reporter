@@ -3,6 +3,7 @@ const PdfPrinter = require('pdfmake');
 const fs = require('fs');
 const { report } = require('process');
 const nodemailer = require('nodemailer');
+const path = require('path');
 
 class PDFReportGenerator {
   constructor() {
@@ -52,14 +53,27 @@ class PDFReportGenerator {
 
         const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
         const pdfPath = `${report_settings.report_name}.pdf`;
+        const newPdfPath = path.join('pdfs', `${report_settings.report_name}.pdf`);
         console.log(pdfPath);
-        pdfDoc.pipe(fs.createWriteStream(pdfPath));
+        pdfDoc.pipe(fs.createWriteStream(newPdfPath));
         pdfDoc.end();
 
-        let recipient_emails = report_settings.recipient_emails;
-        
-        for (let i = 0; i < recipient_emails.length; i++) {
-            await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, pdfPath);
+        pdfDoc.on('end', () => {
+            fs.chmod(newPdfPath, 0o777, (err) => {
+                if (err) {
+                    console.error(`Failed to set permissions for ${newPdfPath}:`, err);
+                } else {
+                    console.log(`Permissions set to 777 for ${newPdfPath}`);
+                }
+            });
+        });
+
+        let recipient_emails = report_settings.mail_to;
+
+        if (recipient_emails && recipient_emails.length > 0) {
+            for (let i = 0; i < recipient_emails.length; i++) {
+                await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, pdfPath);
+            }
         }
 
     } catch (err) {
@@ -96,20 +110,33 @@ class PDFReportGenerator {
             header: {
                 fontSize: 22,
                 bold: true,
-                margin: [0, 0, 0, 10] // Adjust the margin as needed
+                margin: [0, 0, 0, 10]
             }
         },
     };
 
     const pdfDoc = printer.createPdfKitDocument(docDefinition);
     const pdfPath = `${report_settings.report_name}.pdf`;
-    pdfDoc.pipe(fs.createWriteStream(pdfPath));
+    const newPdfPath = path.join('pdfs', `${report_settings.report_name}.pdf`);
+    pdfDoc.pipe(fs.createWriteStream(newPdfPath));
     pdfDoc.end();
 
-    let recipient_emails = report_settings.recipient_emails;
-        
-    for (let i = 0; i < recipient_emails.length; i++) {
-        await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, pdfPath);
+    pdfDoc.on('end', () => {
+        fs.chmod(newPdfPath, 0o777, (err) => {
+            if (err) {
+                console.error(`Failed to set permissions for ${newPdfPath}:`, err);
+            } else {
+                console.log(`Permissions set to 777 for ${newPdfPath}`);
+            }
+        });
+    });
+
+    let recipient_emails = report_settings.mail_to;
+
+    if (recipient_emails && recipient_emails.length > 0) {
+        for (let i = 0; i < recipient_emails.length; i++) {
+            await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, pdfPath);
+        }
     }
   }
 
