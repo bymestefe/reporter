@@ -20,7 +20,9 @@ class QueueDatabase {
     CREATE TABLE IF NOT EXISTS report_results (
       id SERIAL PRIMARY KEY,
       report_name TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      start_date TIMESTAMP,
+      end_date TIMESTAMP
     );
   `;
   
