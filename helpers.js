@@ -26,7 +26,15 @@ class Helpers {
         for (let row of data) {
           try {
             if (row.payload.database === "clickhouse") {
-              let query = await ArchiveDbClickhouse.createSelectQuery(row.payload);
+
+              let query = "";
+              
+              if (row.payload.query && row.payload.query.includes("SELECT")) {
+                query = row.payload.query;
+              } else {
+                query = await ArchiveDbClickhouse.createSelectQuery(row.payload);
+              }
+
               let res = await ArchiveDbClickhouse.executeQuery(query);
   
               let report_settings = {
