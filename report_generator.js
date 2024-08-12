@@ -144,10 +144,9 @@ class PDFReportGenerator {
                 pass: smtp_settings.pass
             }
         });
-
         let attachments = reports.map(report => ({
             filename: `${report.report_name}.pdf`,
-            path: report.pdfPath
+            path: path.join('pdfs', `${report.report_name}.pdf`)
         }));
 
         let mailOptions = {
