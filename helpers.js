@@ -22,6 +22,7 @@ class Helpers {
       if (!processing) {
         processing = true;
         let data = await fn();
+        let reportsToSend = [];
   
         for (let row of data) {
           try {
@@ -70,6 +71,8 @@ class Helpers {
               } else {
                 await PdfGenerator.generatePDF(res, report_settings);
               }
+
+              reportsToSend.push(report_settings);
             } else {
               console.log("Database is not clickhouse");
             }
@@ -80,11 +83,15 @@ class Helpers {
             QueueDatabase.updateReportResult(row.payload.result_id, 'error occured');
           }
         }
+
+        if (reportsToSend.length > 0) {
+          await PdfGenerator.sendReportsInOneEmail(reportsToSend);
+        }
   
         processing = false;
       }
   
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      await new Promise(resolve => setTimeout(resolve, 20000));
     }
   }
 }

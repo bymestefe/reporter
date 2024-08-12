@@ -65,13 +65,6 @@ class PDFReportGenerator {
             });
         });
 
-        let recipient_emails = report_settings.mail_to;
-        if (recipient_emails && recipient_emails.length > 0) {
-            for (let i = 0; i < recipient_emails.length; i++) {
-                await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, newPdfPath);
-            }
-        }
-
     } catch (err) {
         console.error('Error generating PDF:', err);
     }
@@ -125,16 +118,23 @@ class PDFReportGenerator {
         });
     });
 
-    let recipient_emails = report_settings.mail_to;
-    if (recipient_emails && recipient_emails.length > 0) {
-        for (let i = 0; i < recipient_emails.length; i++) {
-            await this.sendEmail(report_settings.smtp_settings, recipient_emails[i], report_settings, newPdfPath);
-        }
-    }
   }
 
-  async  sendEmail(smtp_settings, recipient_email, report_settings, pdfPath) {
+  async sendReportsInOneEmail(reports) {
     try {
+        if (reports.length === 0) {
+            console.log('No reports to send.');
+            return;
+        }
+
+        let smtp_settings = reports[0].smtp_settings;
+        let recipient_emails = reports[0].mail_to;
+
+        if (!recipient_emails || recipient_emails.length === 0) {
+            console.log('No recipient emails provided.');
+            return;
+        }
+
         let transporter = nodemailer.createTransport({
             host: smtp_settings.host,
             port: smtp_settings.port,
@@ -145,17 +145,17 @@ class PDFReportGenerator {
             }
         });
 
+        let attachments = reports.map(report => ({
+            filename: `${report.report_name}.pdf`,
+            path: report.pdfPath
+        }));
+
         let mailOptions = {
             from: smtp_settings.user,
-            to: recipient_email,
-            subject: report_settings.report_title,
-            text: 'Please find the attached report.',
-            attachments: [
-                {
-                    filename: `${report_settings.report_name}.pdf`,
-                    path: pdfPath
-                }
-            ]
+            to: recipient_emails.join(', '),
+            subject: 'Prodarc Reporter - Reports',
+            text: 'Please find the attached reports.',
+            attachments: attachments
         };
 
         let info = await transporter.sendMail(mailOptions);
