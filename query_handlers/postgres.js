@@ -50,6 +50,10 @@ class QueueDatabase {
         ALTER TABLE report_results
           ADD COLUMN IF NOT EXISTS is_scheduled INTEGER DEFAULT 0,
           ADD COLUMN IF NOT EXISTS schedule_report_id INTEGER
+      `,
+      `
+      ALTER TABLE scheduled_report_items
+        ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive'))
       `
     ];
   
@@ -169,7 +173,7 @@ class QueueDatabase {
   
       const result = await pool.query(`
         SELECT * FROM scheduled_report_items
-        WHERE schedule_time = $1
+        WHERE schedule_time = $1 AND status = 'active'
         AND (
           (schedule_type = 'daily') OR
           (schedule_type = 'weekly' AND EXTRACT(DOW FROM CURRENT_DATE) = EXTRACT(DOW FROM last_run + INTERVAL '1 week')) OR
