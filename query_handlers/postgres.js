@@ -113,19 +113,20 @@ class QueueDatabase {
   createIndividualReportResult = async (reportResultId, result, reportName, status) => {
 
     let path = '/usr/local/siemplus/reporter/pdfs/' + reportName + '.pdf';
-    let resultJson;
-    resultJson = JSON.stringify(result);
+    let resultJson = JSON.stringify(result);
     const insertQuery = {
-      text: 'INSERT INTO individual_report_results (report_result_id, result, path, status) VALUES ($1, $2, $3, $4)',
+      text: 'INSERT INTO individual_report_results (report_result_id, result, path, status) VALUES ($1, $2, $3, $4) RETURNING id',
       values: [reportResultId, resultJson, path, status]
     };
 
     try {
-      await pool.query(insertQuery);
+      const result = await pool.query(insertQuery);
+      return result.rows[0].id;
     } catch (error) {
       console.error('Error creating individual report result:', error);
+      return null;
     }
-  }
+}
 
   checkNewRows = async () => {
     let queryText;
@@ -275,8 +276,7 @@ class QueueDatabase {
 
     let report_id = await this.createReportResult(input.report_name, currendDateStr, endDateStr, 1, scheduleReportId);
     if (report_id != null) {
-      input.result_id = report_id;
-      this.createIndividualReportResult(report_id, '', input.report_name, 'processing');
+      input.result_id = await this.createIndividualReportResult(report_id, '', input.report_name, 'processing');
     }
     
     return input;
