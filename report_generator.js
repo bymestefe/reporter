@@ -1,9 +1,11 @@
 const { ChartJSNodeCanvas } = require('chartjs-node-canvas');
 const PdfPrinter = require('pdfmake');
 const fs = require('fs');
-const { report } = require('process');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const archiver = require('archiver');
+const SMTPHelper = require('./helpers/smtp_helpers');
+const logMessage = require('./helpers/logger');
 
 class PDFReportGenerator {
   constructor() {
@@ -18,297 +20,236 @@ class PDFReportGenerator {
     this.printer = new PdfPrinter(this.fonts);
   }
 
-  async generatePDF(data, report_settings) {
-    try {
-        const currentDate = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
-        const docDefinition = {
-            content: [
-                {
-                    text: `Creator: ${report_settings.creator} | ${currentDate}`,
-                    alignment: 'right',
-                    fontSize: 5,
-                    margin: [0, -35, 0, 0]
-                },
-                {
-                    columns: [
-                        {
-                            text: report_settings.report_title,
-                            style: 'header',
-                            alignment: 'left',
-                        },
-                        {
-                            image: report_settings.logo,
-                            width: 50,
-                            height: 50,
-                            alignment: 'right',
-                            margin: [0, 0, 0, 0]
-                        },
-                    ],
-                },
-                this.createTable(data),
-            ],
-            styles: this.getStyles(),
-            pageOrientation: report_settings.orientation,
-        };
+  generatePDF(data, reportSettings) {
+    return new Promise((resolve, reject) => {
+      try {
+        const pdfPath = this.getFilePath(reportSettings.report_name, 'pdfs');
+        const docDefinition = this.buildDocDefinition(data, reportSettings);
 
         const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
-        const pdfPath = `${report_settings.report_name}.pdf`;
-        const newPdfPath = path.join('pdfs', `${report_settings.report_name}.pdf`);
-        pdfDoc.pipe(fs.createWriteStream(newPdfPath));
-        pdfDoc.end();
+        const writeStream = fs.createWriteStream(pdfPath);
 
-        pdfDoc.on('end', () => {
-            fs.chmod(newPdfPath, 0o777, (err) => {
-                if (err) {
-                    console.error(`Failed to set permissions for ${newPdfPath}:`, err);
-                }
-            });
+        writeStream.on('finish', async () => {
+          await this.setFilePermissions(pdfPath);
+          resolve();
         });
 
-    } catch (err) {
-        console.error('Error generating PDF:', err);
-    }
+        writeStream.on('error', (err) => reject(`Error generating PDF: ${err}`));
+
+        pdfDoc.pipe(writeStream);
+        pdfDoc.end();
+      } catch (err) {
+        reject(`Error generating PDF: ${err}`);
+      }
+    });
   }
 
-  async generatePdfWithChart(data, labels, report_settings) {
+  generatePdfWithChart(data, labels, reportSettings) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const imageBuffer = await this.createChartImage(
+          reportSettings.chart_type,
+          data,
+          labels,
+          reportSettings.report_title
+        );
+        const pdfPath = this.getFilePath(reportSettings.report_name, 'pdfs');
+        const docDefinition = this.buildChartDocDefinition(imageBuffer);
 
-    const chartType = report_settings.chart_type;
-    const title = report_settings.report_title;
-    const imageBuffer = await this.createChartImage(chartType, data, labels, title);
-    const imageBase64 = imageBuffer.toString('base64');
-    const fonts = {
-        Roboto: {
-            normal: 'fonts/Roboto-Regular.ttf',
-            bold: 'fonts/Roboto-Medium.ttf',
-            italics: 'fonts/Roboto-Italic.ttf',
-            bolditalics: 'fonts/Roboto-MediumItalic.ttf'
-        }
-    };
+        const pdfDoc = this.printer.createPdfKitDocument(docDefinition);
+        const writeStream = fs.createWriteStream(pdfPath);
 
-    const printer = new PdfPrinter(fonts);
-
-    const docDefinition = {
-        content: [
-            {
-                image: `data:image/png;base64,${imageBase64}`,
-                width: 730
-            },
-        ],
-        pageOrientation: 'landscape',
-        styles: {
-            header: {
-                fontSize: 22,
-                bold: true,
-                margin: [0, 0, 0, 10]
-            }
-        },
-    };
-
-    const pdfDoc = printer.createPdfKitDocument(docDefinition);
-    const pdfPath = `${report_settings.report_name}.pdf`;
-    const newPdfPath = path.join('pdfs', `${report_settings.report_name}.pdf`);
-    pdfDoc.pipe(fs.createWriteStream(newPdfPath));
-    pdfDoc.end();
-
-    pdfDoc.on('end', () => {
-        fs.chmod(newPdfPath, 0o777, (err) => {
-            if (err) {
-                console.error(`Failed to set permissions for ${newPdfPath}:`, err);
-            }
+        writeStream.on('finish', async () => {
+          await this.setFilePermissions(pdfPath);
+          resolve();
         });
-    });
 
+        writeStream.on('error', (err) => reject(`Error generating PDF with chart: ${err}`));
+
+        pdfDoc.pipe(writeStream);
+        pdfDoc.end();
+      } catch (err) {
+        reject(`Error generating PDF with chart: ${err}`);
+      }
+    });
   }
 
   async sendReportsInOneEmail(reports) {
     try {
-        if (reports.length === 0) {
-            console.log('No reports to send.');
-            return;
-        }
+      if (!reports || reports.length === 0) return logMessage('No reports to send.', 'INFO');
 
-        let smtp_settings = reports[0].smtp_settings;
-        let recipient_emails = reports[0].mail_to;
+      const { smtp_settings, mail_to } = reports[0];
+      if (!mail_to || mail_to.length === 0) return logMessage('No recipients found for smtp.', 'INFO');
 
-        if (!recipient_emails || recipient_emails.length === 0) {
-            console.log('No recipient emails provided.');
-            return;
-        }
-
-        let transporter = nodemailer.createTransport({
-            host: smtp_settings.host,
-            port: smtp_settings.port,
-            secure: smtp_settings.secure,
-            auth: {
-                user: smtp_settings.user,
-                pass: smtp_settings.pass
-            }
-        });
-        let attachments = reports.map(report => ({
-            filename: `${report.report_name}.pdf`,
-            path: path.join('pdfs', `${report.report_name}.pdf`)
-        }));
-
-        let mailOptions = {
-            from: smtp_settings.user,
-            to: recipient_emails.join(', '),
-            subject: 'Prodarc Reporter - Reports',
-            text: 'Please find the attached reports.',
-            attachments: attachments
-        };
-
-        let info = await transporter.sendMail(mailOptions);
-        console.log('Email sent: ' + info.response);
+      const zipFilePath = await this.createArchive(reports);
+      
+      if (smtp_settings.authType !== 'NTLM') {
+        await this.sendEmailWithNodemailer(smtp_settings, mail_to, zipFilePath);
+      } else {
+        await this.sendEmailWithNTLM(smtp_settings, mail_to, zipFilePath);
+      }
     } catch (error) {
-        console.error('Error sending email:', error);
+      logMessage(`Error sending email: ${error}`);
     }
   }
 
-  async createChartImage(chartType, data, labels, title, indexAxis='x', width = 800, height = 600) {
-    const dataCount = data.length;
-    const { backgroundColors, borderColors } = this.generateColors(data,dataCount);
-    const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height, plugins: {
-        requireLegacy: ['chartjs-plugin-datalabels']
-    } });
+  buildDocDefinition(data, reportSettings) {
+    const currentDate = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+    return {
+      content: [
+        { text: `Creator: ${reportSettings.creator} | ${currentDate}`, alignment: 'right', fontSize: 5, margin: [0, -35, 0, 0] },
+        { columns: [{ text: reportSettings.report_title, style: 'header', alignment: 'left' }, { image: reportSettings.logo, width: 50, height: 50, alignment: 'right', margin: [0, 0, 0, 0] }] },
+        this.createTable(data)
+      ],
+      styles: this.getStyles(),
+      pageOrientation: reportSettings.orientation
+    };
+  }
 
-    const configuration = {
-        type: chartType,
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '',
-                data: data,
-                fill: false,
-                borderColor: 'black',
-                tension: 0,
-                backgroundColor: backgroundColors,
-                borderColor: borderColors
-            }],
-        },
-        options: {
-            responsive: true,
-            indexAxis: indexAxis,
-            plugins: {
-              legend: {
-                display: true,
-                title: {
-                    display: true,
-                    text: title,
-                    color: 'black',
-                    bold: true
+  buildChartDocDefinition(imageBuffer) {
+    return {
+      content: [{ image: `data:image/png;base64,${imageBuffer.toString('base64')}`, width: 730 }],
+      pageOrientation: 'landscape',
+      styles: { header: { fontSize: 22, bold: true, margin: [0, 0, 0, 10] } }
+    };
+  }
 
-                },
-                position: 'top',
-              },
-            }
-          },
+  async createChartImage(chartType, data, labels, title, indexAxis = 'x', width = 800, height = 600) {
+    const chartJSNodeCanvas = new ChartJSNodeCanvas({ width, height });
+    const colors = this.generateColors(data);
+    
+    const config = {
+      type: chartType,
+      data: { labels, datasets: [{ data, backgroundColor: colors.background, borderColor: colors.border }] },
+      options: {
+        responsive: true,
+        indexAxis,
+        plugins: { legend: { display: true, title: { display: true, text: title, color: 'black', bold: true }, position: 'top' } }
+      }
     };
 
-    return await chartJSNodeCanvas.renderToBuffer(configuration);
+    return await chartJSNodeCanvas.renderToBuffer(config);
+  }
+
+  async createArchive(reports) {
+    const zipName = `${reports[0].report_name}.zip`;
+    const zipFilePath = path.join('archive', zipName);
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    archive.pipe(output);
+    reports.forEach(report => {
+      const filePath = this.getFilePath(report.report_name, 'pdfs');
+      if (fs.existsSync(filePath)) archive.file(filePath, { name: `${report.report_name}.pdf` });
+    });
+
+    await archive.finalize();
+    return zipFilePath;
+  }
+
+  async sendEmailWithNodemailer(smtpSettings, recipients, zipFilePath) {
+    const transporter = nodemailer.createTransport({
+      host: smtpSettings.host,
+      port: smtpSettings.port,
+      secure: smtpSettings.secure,
+      auth: { user: smtpSettings.user, pass: smtpSettings.pass }
+    });
+
+    await transporter.sendMail({
+      from: smtpSettings.user,
+      to: recipients.join(', '),
+      subject: 'Prodarc Reporter - Reports',
+      text: 'Please find the attached reports.',
+      attachments: [{ filename: path.basename(zipFilePath), path: zipFilePath }]
+    });
+  }
+
+  async sendEmailWithNTLM(smtpSettings, recipients, zipFilePath) {
+    const smtp = new SMTPHelper(smtpSettings.host, smtpSettings.port, smtpSettings.authUser, smtpSettings.pass, 'NTLM', smtpSettings.secure);
+    await smtp.connect();
+    await smtp.authenticate();
+    await smtp.sendMail(smtpSettings.user, recipients, 'Prodarc Reporter - Reports', 'Please find the attached reports.', true, [zipFilePath]);
+    await smtp.quit();
+  }
+
+  async setFilePermissions(filePath) {
+    return new Promise((resolve, reject) => {
+      fs.chmod(filePath, 0o777, (err) => {
+        if (err) return reject(`Failed to set permissions for ${filePath}: ${err}`);
+        resolve();
+      });
+    });
   }
 
   createTable(data) {
-    const body = [];
-    body.push(Object.keys(data[0]).map(key => ({
-        text: key.charAt(0).toUpperCase() + key.slice(1),
-        style: 'tableHeader',
-        fontSize: 8
-    })));
+    if (!data || data.length === 0) {
+        return {
+            table: {
+                headerRows: 1,
+                widths: ['100%'],
+                body: [
+                    [{ text: 'Data not found', style: 'tableHeader', fontSize: 14, alignment: 'center' }]
+                ]
+            },
+            layout: this.getTableLayout()
+        };
+    }
+
+    const headers = Object.keys(data[0]).map(key => ({ text: key.charAt(0).toUpperCase() + key.slice(1), style: 'tableHeader', fontSize: 8 }));
+    const body = [headers, ...data.map(row => Object.values(row).map(value => ({ text: value, fontSize: 7 })))];
 
     let count = Object.keys(data[0]).length;
     let width = 100 / count;
     let widths = new Array(count).fill(`${width}%`);
 
-    data.forEach(row => {
-        body.push(Object.values(row).map(value => ({
-            text: value,
-            fontSize: 7
-        })));
-    });
+    return { table: { headerRows: 1, widths: widths, body: body }, layout: this.getTableLayout() };
+}
 
+  getTableLayout() {
     return {
-        table: {
-            headerRows: 1,
-            widths: widths,
-            body: body,
-        },
-        layout: {
-            hLineWidth: function (i, node) {
-                return (i === 0 || i === node.table.body.length) ? 2 : 1;
-            },
-            vLineWidth: function (i, node) {
-                return (i === 0 || i === node.table.widths.length) ? 2 : 1;
-            },
-            hLineColor: function (i, node) {
-                return (i === 0 || i === node.table.body.length) ? 'black' : 'gray';
-            },
-            vLineColor: function (i, node) {
-                return (i === 0 || i === node.table.widths.length) ? 'black' : 'gray';
-            },
-            fillColor: function (rowIndex, node, columnIndex) {
-                if (rowIndex === 0) {
-                    return '#686D76';
-                }
-                return (rowIndex % 2 === 0) ? '#CCCCCC' : null;
-            }
-        }
+      hLineWidth: (i, node) => (i === 0 || i === node.table.body.length) ? 2 : 1,
+      vLineWidth: (i, node) => (i === 0 || i === node.table.widths.length) ? 2 : 1,
+      hLineColor: (i, node) => (i === 0 || i === node.table.body.length) ? 'black' : 'gray',
+      vLineColor: (i, node) => (i === 0 || i === node.table.widths.length) ? 'black' : 'gray',
+      fillColor: (rowIndex) => rowIndex === 0 ? '#686D76' : (rowIndex % 2 === 0 ? '#CCCCCC' : null)
     };
+  }
+
+  generateColors(data) {
+    const sum = data.reduce((a, b) => a + b, 0);
+    let degreeSum = 0;
+
+    return data.reduce(
+      (colors, value) => {
+        const hue = (value / sum) * 360;
+        degreeSum += hue;
+        const [r, g, b] = this.hslToRgb(degreeSum, 100, 50);
+        colors.background.push(`rgba(${r}, ${g}, ${b}, 0.4)`);
+        colors.border.push(`rgba(${r}, ${g}, ${b}, 1)`);
+        return colors;
+      },
+      { background: [], border: [] }
+    );
+  }
+
+  hslToRgb(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    return [Math.round(255 * (l - a * Math.max(-1, Math.min(k(0) - 3, Math.min(9 - k(0), 1))))), Math.round(255 * (l - a * Math.max(-1, Math.min(k(8) - 3, Math.min(9 - k(8), 1))))), Math.round(255 * (l - a * Math.max(-1, Math.min(k(4) - 3, Math.min(9 - k(4), 1)))))];
   }
 
   getStyles() {
     return {
-        header: {
-            fontSize: 14,
-            bold: true,
-            margin: [0, 16, 0, 0]
-        },
-        subheader: {
-            fontSize: 12,
-            bold: true,
-            margin: [0, 10, 0, 5]
-        },
-        tableExample: {
-            margin: [0, 10, 0, 5]
-        },
-        tableHeader: {
-            bold: true,
-            fontSize: 13,
-            color: '#EEEEEE'
-        }
+      header: { fontSize: 22, bold: true, margin: [0, 0, 0, 10] },
+      subheader: { fontSize: 16, bold: true, margin: [0, 10, 0, 5] },
+      tableHeader: { bold: true, fontSize: 10, color: 'white' }
     };
   }
 
-  generateColors(data,dataCount) {
-    const colors = {
-        backgroundColors: [],
-        borderColors: []
-    };
-    let sum = data.reduce((a, b) => a + b, 0);
-    let degree_sum = 0;
-
-    for (let i = 0; i < dataCount; i++) {
-        const hue = data[i] / sum * 360;
-        degree_sum += hue;
-        const [r, g, b] = this.hslToRgb(degree_sum, 100, 50);
-
-        colors.backgroundColors.push(`rgba(${r}, ${g}, ${b}, 0.4)`);
-        colors.borderColors.push(`rgba(${r}, ${g}, ${b}, 0)`);
-    }
-
-    return colors;
+  getFilePath(reportName, dir) {
+    return path.join(dir, `${reportName}.pdf`);
   }
-
-  hslToRgb(h, s, l) {
-    s /= 100;
-    l /= 100;
-
-    const k = n => (n + h / 30) % 12;
-    const a = s * Math.min(l, 1 - l);
-    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-
-    return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
-  }
-
 }
 
 module.exports = PDFReportGenerator;

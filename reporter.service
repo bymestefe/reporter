@@ -1,0 +1,12 @@
+[Unit]
+Description=Prodarc Report Service
+
+[Service]
+ExecStart=/usr/local/bin/node /usr/local/siemplus/reporter/app.js
+Restart=always
+User=root
+Environment=PATH=/usr/bin:/usr/local/bin
+WorkingDirectory=/usr/local/siemplus/reporter
+
+[Install]
+WantedBy=multi-user.target

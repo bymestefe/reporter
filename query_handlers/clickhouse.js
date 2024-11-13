@@ -1,4 +1,5 @@
 const clickhouse = require('../configs/clickhouse_config');
+const logMessage = require('../helpers/logger');
 
 class ArchiveDbClickhouse {
 
@@ -10,7 +11,7 @@ class ArchiveDbClickhouse {
             })
         return result.json();
     } catch (err) {
-        console.error('Error executing query', err.stack);
+        logMessage(`Error executing query: ${err.stack}`);
     }
   }
 
@@ -62,7 +63,7 @@ class ArchiveDbClickhouse {
     try {
         await clickhouse.end();
     } catch (err) {
-        console.error('Error closing connection', err.stack);
+        logMessage(`Error closing connection: ${err.stack}`);
     }
   }
   

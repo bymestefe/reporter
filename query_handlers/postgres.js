@@ -1,4 +1,5 @@
 const pool = require('../configs/db_config');
+const logMessage = require('../helpers/logger');
 
 class QueueDatabase {
 
@@ -61,9 +62,9 @@ class QueueDatabase {
       for (const query of queries) {
         await pool.query(query);
       }
-      console.log('Tables are ready.');
+      logMessage('Tables are ready', 'INFO');
     } catch (err) {
-      console.error('Error creating tables', err.stack);
+      logMessage('Error creating tables', 'ERROR');
     }
   }
 
@@ -75,9 +76,9 @@ class QueueDatabase {
 
     try {
       await pool.query(updateQuery);
-      console.log(`Updated row with ID ${id} to status ${status}`);
+      logMessage(`Updated row with ID ${id} to status ${status}`, 'INFO');
     } catch (error) {
-      console.error('Error updating row:', error);
+      logMessage(`Error updating row: ${error}`, 'ERROR');
     }
   }
 
@@ -89,9 +90,9 @@ class QueueDatabase {
 
     try {
       await pool.query(updateQuery);
-      console.log(`Updated report result with ID ${id} to status ${status}`);
+      logMessage(`Updated report result with ID ${id} to status ${status}`, 'INFO');
     } catch (error) {
-      console.error('Error updating report result:', error);
+      logMessage(`Error updating report result: ${error}`, 'ERROR');
     }
   }
 
@@ -105,7 +106,7 @@ class QueueDatabase {
       const result = await pool.query(insertQuery);
       return result.rows[0].id;
     } catch (error) {
-      console.error('Error creating report result:', error);
+      logMessage(`Error creating report result: ${error}`, 'ERROR');
       return null;
     }
   }
@@ -123,7 +124,7 @@ class QueueDatabase {
       const result = await pool.query(insertQuery);
       return result.rows[0].id;
     } catch (error) {
-      console.error('Error creating individual report result:', error);
+      logMessage(`Error creating individual report result: ${error}`, 'ERROR');
       return null;
     }
 }
@@ -151,16 +152,15 @@ class QueueDatabase {
 
       if (rows.length > 0) {
         rows.forEach(row => {
-          console.log(`Row ID: ${row.id}, Status: ${row.status}, Payload: ${JSON.stringify(row.payload)}`);
+          logMessage(`Row ID: ${row.id}, Status: ${row.status}, Payload: ${JSON.stringify(row.payload)}`, 'INFO');
         });
 
         this.lastProcessedId = Math.max(...rows.map(row => row.id));
-      } else {
-        console.log('No new rows found.');
       }
+
       return rows; 
     } catch (error) {
-      console.error('Error checking for new rows:', error);
+      logMessage(`Error checking for new rows: ${error}`, 'ERROR');
       return [];
     }
   }
@@ -170,23 +170,21 @@ class QueueDatabase {
       const now = new Date();
       const currentTime = now.toTimeString().split(' ')[0];
 
-      console.log(`Checking for scheduled reports at ${currentTime}`);
-  
       const result = await pool.query(`
         SELECT * FROM scheduled_report_items
         WHERE schedule_time = $1 AND status = 'active'
         AND (
           (schedule_type = 'daily') OR
-          (schedule_type = 'weekly' AND EXTRACT(DOW FROM CURRENT_DATE) = EXTRACT(DOW FROM last_run + INTERVAL '1 week')) OR
-          (schedule_type = 'monthly' AND EXTRACT(DAY FROM CURRENT_DATE) = EXTRACT(DAY FROM last_run + INTERVAL '1 month')) OR
-          (schedule_type = 'yearly' AND EXTRACT(DOY FROM CURRENT_DATE) = EXTRACT(DOY FROM last_run + INTERVAL '1 year'))
+          (schedule_type = 'weekly' AND EXTRACT(DOW FROM CURRENT_DATE) = EXTRACT(DOW FROM COALESCE(last_run, CURRENT_DATE - INTERVAL '1 week') + INTERVAL '1 week')) OR
+          (schedule_type = 'monthly' AND EXTRACT(DAY FROM CURRENT_DATE) = EXTRACT(DAY FROM COALESCE(last_run, CURRENT_DATE - INTERVAL '1 month') + INTERVAL '1 month')) OR
+          (schedule_type = 'yearly' AND EXTRACT(DOY FROM CURRENT_DATE) = EXTRACT(DOY FROM COALESCE(last_run, CURRENT_DATE - INTERVAL '1 year') + INTERVAL '1 year'))
         )
       `, [currentTime]);
   
       const scheduledReports = result.rows;
   
       for (const report of scheduledReports) {
-        console.log(`Triggering report: ${report.report_name}`);
+        logMessage(`Triggering scheduled report: ${report.report_name}`, 'INFO');
 
         let updatedPayload = await this.updateConditionsForScheduledReport(report.payload, report.schedule_type, report.id);
 
@@ -202,7 +200,7 @@ class QueueDatabase {
         `, [report.id]);
       }
     } catch (err) {
-      console.error('Error checking and triggering scheduled reports', err.stack);
+      logMessage(`Error checking and triggering scheduled reports: ${err}`, 'ERROR');
     }
   }
 
@@ -269,9 +267,10 @@ class QueueDatabase {
     
     if (input.query && input.query != "") {
       const query = input.query;
-      const updatedQuery = query.replace(/archive_date BETWEEN '.*?' AND '.*?'/i, `archive_date BETWEEN '${currendDateStr}' AND '${endDateStr}'`);
+      const updatedQuery = query.replace(/(archive_date|created_at) BETWEEN '.*?' AND '.*?'/i, `$1 BETWEEN '${currendDateStr}' AND '${endDateStr}'`);
       input.query = updatedQuery;
     }
+    
     input.report_name = await this.generateReportNameWithTime(input.report_name, true);
 
     let report_id = await this.createReportResult(input.report_name, currendDateStr, endDateStr, 1, scheduleReportId);
@@ -286,7 +285,7 @@ class QueueDatabase {
     try {
       await pool.end();
     } catch (err) {
-      console.error('Error closing connection', err.stack);
+      logMessage(`Error closing connection: ${err}`, 'ERROR');
     }
   }
 

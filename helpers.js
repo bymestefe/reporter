@@ -1,14 +1,15 @@
 const fs = require('fs');
 const ArchiveDbClickhouse = require('./query_handlers/clickhouse');
 const QueueDatabase = require('./query_handlers/postgres');
+const logMessage = require('./helpers/logger');
 
 class Helpers {
 
   static async pngToBase64(filePath) {
     fs.readFile(filePath, (err, data) => {
         if (err) {
-            console.error(err);
-            return;
+          logMessage(`Error reading file: ${err}`);
+          return;
         }
         const base64Data = Buffer.from(data).toString('base64');
         const dataUrl = `data:image/png;base64,${base64Data}`;
@@ -37,10 +38,11 @@ class Helpers {
               }
 
               let res = await ArchiveDbClickhouse.executeQuery(query);
+              let sanitizedRpName = await this.sanitizeReportName(row.payload.report_name);
   
               let report_settings = {
                 logo: row.payload.logo || "logo.png",
-                report_name: row.payload.report_name,
+                report_name: sanitizedRpName,
                 report_title: row.payload.title,
                 orientation: row.payload.is_landscape == 1 ? "landscape" : "portrait",
                 creator: row.payload.creator || "Prodarc",
@@ -79,7 +81,7 @@ class Helpers {
             QueueDatabase.updateQueueItem(row.id, 'done');
             QueueDatabase.updateReportResult(row.payload.result_id, 'completed');
           } catch (error) {
-            console.error(`Error processing row ${row.id}:`, error);
+            logMessage(`Error processing row ${row.id}: ${error}`);
             QueueDatabase.updateReportResult(row.payload.result_id, 'error occured');
           }
         }
@@ -94,6 +96,11 @@ class Helpers {
       await new Promise(resolve => setTimeout(resolve, 20000));
     }
   }
+
+  static async sanitizeReportName(reportName) {
+    return reportName.replace(/[^a-z0-9_]/gi, '_');
+  } 
+
 }
 
 module.exports = Helpers;
